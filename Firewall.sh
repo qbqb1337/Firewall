@@ -141,7 +141,7 @@ ip6tables -I OUTPUT 2 -p udp --dport 51820 -m comment --comment "Allow WireGuard
 
 # Split DNS: Route specific IP addresses outside VPN
 # Define the list of IPs for services like Amazon and Netflix
-split_dns_ips=$(curl -s https://lou.h4ck.me/vpn_bypass.txt)
+split_dns_ips=$(curl -s https://github.com/qbqb1337/Firewall/blob/main/vpn_bypass.txt)
 
 for ip in $split_dns_ips; do
   ip rule add to $ip table main
