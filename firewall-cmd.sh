@@ -7,6 +7,63 @@ systemctl start firewalld
 firewall-cmd --reload
 firewall-cmd --complete-reload
 
+# Define default gateway IPs for IPv4
+default_gw_wg0="x.x.x.x"  # Replace with your wg0 IPv4 gateway IP
+default_gw_tunplus="y.y.y.y"  # Replace with your tunplus IPv4 gateway IP
+
+# Define default gateway IPs for IPv6
+default_gw_wg0_v6="2a0e:1c80:61:x:x"  # Replace with your wg0 IPv6 gateway IP
+# default_gw_tunplus_v6="fe80::80cd:f17:63e1:2f9f"  # Replace with your tunplus IPv6 gateway IP
+
+# Add custom routing tables if not already present
+if ! grep -q "^100 wg0$" /etc/iproute2/rt_tables; then
+  echo "100 wg0" >> /etc/iproute2/rt_tables
+fi
+if ! grep -q "^200 tunplus$" /etc/iproute2/rt_tables; then
+  echo "200 tunplus" >> /etc/iproute2/rt_tables
+fi
+if ! grep -q "^101 wg0-v6$" /etc/iproute2/rt_tables; then
+  echo "101 wg0-v6" >> /etc/iproute2/rt_tables
+fi
+# if ! grep -q "^201 tunplus-v6$" /etc/iproute2/rt_tables; then
+#   echo "201 tunplus-v6" >> /etc/iproute2/rt_tables
+# fi
+
+# Add routes to the custom tables
+ip route flush table 100
+ip route flush table 200
+ip route add default via $default_gw_wg0 table 100
+ip route add default via $default_gw_tunplus table 200
+
+ip -6 route flush table 101
+# ip -6 route flush table 201
+ip -6 route add default via $default_gw_wg0_v6 table 101
+# ip -6 route add default via $default_gw_tunplus_v6 table 201
+
+# Set FWMARK for random load balancing
+ip rule add fwmark 1 table wg0
+ip rule add fwmark 2 table tunplus
+
+ip -6 rule add fwmark 1 table wg0-v6
+ip -6 rule add fwmark 2 table tunplus-v6
+
+# Enable IP forwarding
+sysctl -w net.ipv4.ip_forward=1
+sysctl -w net.ipv6.conf.all.forwarding=1
+
+# Randomly mark outgoing packets for load balancing
+iptables -t mangle -A POSTROUTING -m statistic --mode random --probability 0.5 -j MARK --set-mark 1
+iptables -t mangle -A POSTROUTING -m statistic --mode random --probability 0.5 -j MARK --set-mark 2
+ip6tables -t mangle -A POSTROUTING -m statistic --mode random --probability 0.5 -j MARK --set-mark 1
+ip6tables -t mangle -A POSTROUTING -m statistic --mode random --probability 0.5 -j MARK --set-mark 2
+
+# Ensure the firewalld service is running
+systemctl start firewalld
+
+# Clear all existing zones, services, and direct rules
+firewall-cmd --reload
+firewall-cmd --complete-reload
+
 # Define interfaces (replace eth0 with your actual interface)
 external_iface="eth0"
 wg0_iface="wg0-de-ber"
